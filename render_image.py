@@ -66,8 +66,8 @@ for category in ["cat", "garden", "helicopter"]:
             image.save(f"./images_first_stroke/{category}/train/{category}_{idx}_stroke_{i}.png")
         image = draw_strokes([strokes[0]])
         image.save(f"./images_first_stroke/{category}/train/{category}_{idx}.png")
-        image_last = draw_strokes(strokes)
-        image.save(f"./images_last_stroke/{category}/train/{category}_{idx}.png")
+        image_last = draw_strokes(strokes[:])
+        image_last.save(f"./images_last_stroke/{category}/train/{category}_{idx}.png")
 
     for idx in tqdm(indices["test"]):
         item = data[idx]
@@ -77,7 +77,7 @@ for category in ["cat", "garden", "helicopter"]:
             image.save(f"./images_first_stroke/{category}/test/{category}_{idx}_stroke_{i}.png")
         image = draw_strokes([strokes[0]])
         image.save(f"./images_first_stroke/{category}/test/{category}_{idx}.png")
-        image_last = draw_strokes(strokes)
-        image.save(f"./images_last_stroke/{category}/test/{category}_{idx}.png")
+        image_last = draw_strokes(strokes[:])
+        image_last.save(f"./images_last_stroke/{category}/test/{category}_{idx}.png")
 
 
