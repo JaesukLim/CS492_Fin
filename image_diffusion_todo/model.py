@@ -20,7 +20,7 @@ class DiffusionModule(nn.Module):
         B = x0.shape[0]
         timestep = self.var_scheduler.uniform_sample_t(B, self.device)
 
-        alpha_prod_t = self.var_scheduler.alphas_cumprod[timestep].view(B, 1, 1, 1).expand(B, 3, 64, 64)
+        alpha_prod_t = self.var_scheduler.alphas_cumprod[timestep].view(B, 1, 1, 1).expand(x0.shape)
         eps = torch.randn(x0.shape).to(x0.device)
 
         xt = alpha_prod_t.sqrt() * x0 + (1 - alpha_prod_t).sqrt() * eps

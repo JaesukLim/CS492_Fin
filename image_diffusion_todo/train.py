@@ -43,7 +43,7 @@ def main(args):
         json.dump(config, f, indent=2)
     """######"""
 
-    image_resolution = 64
+    image_resolution = config.image_resolution
     ds_module = QuickDrawDataModule(
         config.root_dir,
         batch_size=config.batch_size,
