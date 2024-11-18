@@ -48,7 +48,7 @@ class DiffusionModule(nn.Module):
         class_label: Optional[torch.Tensor] = None,
         guidance_scale: Optional[float] = 0.0,
     ):
-        x_T = torch.randn([batch_size, 3, self.image_resolution, self.image_resolution]).to(self.device)
+        x_T = torch.randn([batch_size, 30, self.image_resolution, self.image_resolution]).to(self.device)
 
         do_classifier_free_guidance = guidance_scale > 0.0
 

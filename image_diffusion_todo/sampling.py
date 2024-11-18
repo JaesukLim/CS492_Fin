@@ -6,6 +6,7 @@ from dataset import tensor_to_pil_image
 from model import DiffusionModule
 from scheduler import DDPMScheduler
 from pathlib import Path
+from utils import *
 
 
 def main(args):
@@ -49,7 +50,8 @@ def main(args):
                 guidance_scale=0.0,
             )
 
-        pil_images = tensor_to_pil_image(samples)
+        # pil_images = tensor_to_pil_image(samples)
+        pil_images = draw_full_images(tensor_to_strokes(samples))
 
         for j, img in zip(range(sidx, eidx), pil_images):
             img.save(save_dir / f"{j}.png")

@@ -6,7 +6,7 @@ from pathlib import Path
 import matplotlib
 import matplotlib.pyplot as plt
 import torch
-from dataset import QuickDrawDataModule, get_data_iterator, tensor_to_pil_image
+from dataset import QuickDrawDataModule, get_data_iterator, tensor_to_pil_image, QuickDrawPointDataModule
 from dotmap import DotMap
 from model import DiffusionModule
 from network import UNet
@@ -14,6 +14,7 @@ from pytorch_lightning import seed_everything
 from scheduler import DDPMScheduler
 from torchvision.transforms.functional import to_pil_image
 from tqdm import tqdm
+from utils import *
 
 matplotlib.use("Agg")
 
@@ -44,7 +45,7 @@ def main(args):
     """######"""
 
     image_resolution = config.image_resolution
-    ds_module = QuickDrawDataModule(
+    ds_module = QuickDrawPointDataModule(
         config.root_dir,
         batch_size=config.batch_size,
         num_workers=4,
@@ -103,7 +104,8 @@ def main(args):
                 else:  # Unconditional training
                     samples = ddpm.sample(4, return_traj=False)
 
-                pil_images = tensor_to_pil_image(samples)
+                # pil_images = tensor_to_pil_image(samples)
+                pil_images = draw_full_images(tensor_to_strokes(samples))
                 for i, img in enumerate(pil_images):
                     img.save(save_dir / f"step={step}-{i}.png")
 
@@ -157,7 +159,7 @@ if __name__ == "__main__":
     parser.add_argument("--beta_1", type=float, default=1e-4)
     parser.add_argument("--beta_T", type=float, default=0.02)
     parser.add_argument("--seed", type=int, default=63)
-    parser.add_argument("--image_resolution", type=int, default=256)
+    parser.add_argument("--image_resolution", type=int, default=64)
     parser.add_argument("--sample_method", type=str, default="ddpm")
     parser.add_argument("--use_cfg", action="store_true")
     parser.add_argument("--cfg_dropout", type=float, default=0.1)
