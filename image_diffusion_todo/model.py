@@ -13,22 +13,25 @@ class DiffusionModule(nn.Module):
         self.network = network
         self.var_scheduler = var_scheduler
 
-    def get_loss(self, x0, class_label=None, noise=None):
+    def get_loss(self, x0, class_label=None, noise=None, pen_label=None):
         ######## TODO ########
         # DO NOT change the code outside this part.
         # compute noise matching loss.
         B = x0.shape[0]
         timestep = self.var_scheduler.uniform_sample_t(B, self.device)
 
-        alpha_prod_t = self.var_scheduler.alphas_cumprod[timestep].view(B, 1, 1, 1).expand(x0.shape)
+        alpha_prod_t = self.var_scheduler.alphas_cumprod[timestep].view(B, 1, 1).expand(x0.shape)
         eps = torch.randn(x0.shape).to(x0.device)
 
         xt = alpha_prod_t.sqrt() * x0 + (1 - alpha_prod_t).sqrt() * eps
-        eps_theta = self.network(xt, timestep, class_label)
+        eps_theta, pen_state = self.network(xt[:, :, 0:2], timestep, y=class_label)
 
-        x0 = (eps - eps_theta) ** 2
+        x0 = ((eps[:, :, 0:2] - eps_theta) ** 2).mean()
+        # Calculating Pen State Loss
+        # print(pen_state, pen_label)
+        pen_loss = nn.BCELoss()(pen_state, pen_label)
 
-        loss = x0.mean()
+        loss = x0 + 0.5 * pen_loss
         ######################
         return loss
     
@@ -48,7 +51,7 @@ class DiffusionModule(nn.Module):
         class_label: Optional[torch.Tensor] = None,
         guidance_scale: Optional[float] = 0.0,
     ):
-        x_T = torch.randn([batch_size, 30, self.image_resolution, self.image_resolution]).to(self.device)
+        x_T = torch.randn([batch_size, 96, 3]).to(self.device)
 
         do_classifier_free_guidance = guidance_scale > 0.0
 
@@ -71,18 +74,18 @@ class DiffusionModule(nn.Module):
             if do_classifier_free_guidance:
                 ######## TODO ########
                 # Assignment 2. Implement the classifier-free guidance.
-                noise_class = self.network(x_t, timestep=t.to(self.device), class_label=class_label)
-                null_class = self.network(x_t, timestep=t.to(self.device), class_label=null_conditions)
+                noise_class = self.network(x_t[:, :, 0:2], timestep=t.to(self.device), y=class_label)
+                null_class = self.network(x_t[:, :, 0:2], timestep=t.to(self.device), y=null_conditions)
                 noise_pred = (1 + guidance_scale) * noise_class - guidance_scale * null_class
                 #######################
             else:
-                noise_pred = self.network(
-                    x_t,
-                    timestep=t.to(self.device),
-                    class_label=class_label,
+                noise_pred, pen_state = self.network(
+                    x_t[:, :, 0:2],
+                    timesteps=t.to(self.device),
+                    y=class_label,
                 )
 
-            x_t_prev = self.var_scheduler.step(x_t, t, noise_pred)
+            x_t_prev = self.var_scheduler.step(x_t[:, :, 0:2], t, noise_pred, pen_state)
 
             traj[-1] = traj[-1].cpu()
             traj.append(x_t_prev.detach())

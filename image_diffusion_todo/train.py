@@ -6,7 +6,7 @@ from pathlib import Path
 import matplotlib
 import matplotlib.pyplot as plt
 import torch
-from dataset import QuickDrawDataModule, get_data_iterator, tensor_to_pil_image, QuickDrawPointDataModule
+from dataset import QuickDrawDataModule, get_data_iterator, tensor_to_pil_image
 from dotmap import DotMap
 from model import DiffusionModule
 from network import UNet
@@ -15,6 +15,7 @@ from scheduler import DDPMScheduler
 from torchvision.transforms.functional import to_pil_image
 from tqdm import tqdm
 from utils import *
+from unet import UNetModel
 
 matplotlib.use("Agg")
 
@@ -45,7 +46,7 @@ def main(args):
     """######"""
 
     image_resolution = config.image_resolution
-    ds_module = QuickDrawPointDataModule(
+    ds_module = QuickDrawDataModule(
         config.root_dir,
         batch_size=config.batch_size,
         num_workers=4,
@@ -64,17 +65,47 @@ def main(args):
         mode="linear",
     )
 
-    network = UNet(
-        T=config.num_diffusion_train_timesteps,
-        image_resolution=image_resolution,
-        ch=128,
-        ch_mult=[1, 2, 2, 2],
-        attn=[1],
-        num_res_blocks=4,
-        dropout=0.1,
-        use_cfg=args.use_cfg,
-        cfg_dropout=args.cfg_dropout,
-        num_classes=getattr(ds_module, "num_classes", None),
+    # network = UNet(
+    #     T=config.num_diffusion_train_timesteps,
+    #     image_resolution=image_resolution,
+    #     ch=128,
+    #     ch_mult=[1, 2, 2, 2],
+    #     attn=[1],
+    #     num_res_blocks=4,
+    #     dropout=0.1,
+    #     use_cfg=args.use_cfg,
+    #     cfg_dropout=args.cfg_dropout,
+    #     num_classes=getattr(ds_module, "num_classes", None),
+    # )
+
+    if image_resolution == 256:
+        channel_mult = (1, 1, 2, 2, 4, 4)
+    elif image_resolution == 64:
+        channel_mult = (1, 2, 3, 4)
+    elif image_resolution == 32:
+        channel_mult = (1, 2, 2, 2)
+    elif image_resolution == 96:
+        channel_mult = (1, 2, 3, 4)
+    else:
+        raise ValueError(f"unsupported image size: {image_resolution}")
+
+    attention_ds = []
+    for res in "16,8".split(","):
+        attention_ds.append(image_resolution // int(res))
+
+    network = UNetModel(
+        in_channels=96,
+        model_channels=96,
+        out_channels=3,
+        num_res_blocks=2,
+        attention_resolutions=attention_ds,
+        dropout=0.0,
+        channel_mult=channel_mult,
+        num_classes=1,
+        use_checkpoint=False,
+        num_heads=4,
+        num_heads_upsample=-1,
+        use_scale_shift_norm=True,
     )
 
     ddpm = DiffusionModule(network, var_scheduler)
@@ -97,27 +128,28 @@ def main(args):
 
                 if args.use_cfg:  # Conditional, CFG training
                     samples = ddpm.sample(
-                        4,
-                        class_label=torch.randint(1, 2, (4,)).to(config.device),
+                        1,
+                        class_label=torch.randint(1, 2, (1,)).to(config.device),
                         return_traj=False,
                     )
                 else:  # Unconditional training
-                    samples = ddpm.sample(4, return_traj=False)
+                    samples = ddpm.sample(1, return_traj=False)
 
-                # pil_images = tensor_to_pil_image(samples)
-                pil_images = draw_full_images(tensor_to_strokes(samples))
+                pil_images = tensor_to_pil_image(samples)
+                # pil_images = draw_full_images(tensor_to_strokes(samples))
                 for i, img in enumerate(pil_images):
                     img.save(save_dir / f"step={step}-{i}.png")
 
                 ddpm.save(f"{save_dir}/last.ckpt")
                 ddpm.train()
 
-            img, label = next(train_it)
-            img, label = img.to(config.device), label.to(config.device)
+            img, pen_label, cls_label = next(train_it)
+            img, pen_label, cls_label = img.to(config.device), pen_label.to(config.device), cls_label.to(config.device)
+
             if args.use_cfg:  # Conditional, CFG training
-                loss = ddpm.get_loss(img, class_label=label)
+                loss = ddpm.get_loss(img, pen_label=pen_label, class_label=cls_label)
             else:  # Unconditional training
-                loss = ddpm.get_loss(img)
+                loss = ddpm.get_loss(img, pen_label=pen_label)
             pbar.set_description(f"Loss: {loss.item():.4f}")
 
             optimizer.zero_grad()
@@ -134,7 +166,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--gpu", type=int, default=0)
     parser.add_argument("--batch_size", type=int, default=16)
-    parser.add_argument("--root_dir", type=str, default="./data")
+    parser.add_argument("--root_dir", type=str, default="../data")
     parser.add_argument("--category", type=str, default="cat")
     parser.add_argument(
         "--train_num_steps",
@@ -159,7 +191,7 @@ if __name__ == "__main__":
     parser.add_argument("--beta_1", type=float, default=1e-4)
     parser.add_argument("--beta_T", type=float, default=0.02)
     parser.add_argument("--seed", type=int, default=63)
-    parser.add_argument("--image_resolution", type=int, default=64)
+    parser.add_argument("--image_resolution", type=int, default=256)
     parser.add_argument("--sample_method", type=str, default="ddpm")
     parser.add_argument("--use_cfg", action="store_true")
     parser.add_argument("--cfg_dropout", type=float, default=0.1)

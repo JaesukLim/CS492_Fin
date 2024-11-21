@@ -71,7 +71,7 @@ class DDPMScheduler(BaseScheduler):
 
         self.register_buffer("sigmas", sigmas)
 
-    def step(self, x_t: torch.Tensor, t: int, eps_theta: torch.Tensor):
+    def step(self, x_t: torch.Tensor, t: int, eps_theta: torch.Tensor, pen_state: torch.Tensor):
         """
         One step denoising function of DDPM: x_t -> x_{t-1}.
 
@@ -93,6 +93,7 @@ class DDPMScheduler(BaseScheduler):
         x_t_prev = (x_t - eps_factor * eps_theta) / self.alphas[t].sqrt() + self.sigmas[t] * z
 
         sample_prev = x_t_prev
+        sample_prev = torch.cat((sample_prev, (pen_state > 0.5).float()), dim=2)
         #######################
         
         return sample_prev
