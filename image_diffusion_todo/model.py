@@ -74,8 +74,8 @@ class DiffusionModule(nn.Module):
             if do_classifier_free_guidance:
                 ######## TODO ########
                 # Assignment 2. Implement the classifier-free guidance.
-                noise_class = self.network(x_t[:, :, 0:2], timestep=t.to(self.device), y=class_label)
-                null_class = self.network(x_t[:, :, 0:2], timestep=t.to(self.device), y=null_conditions)
+                noise_class, pen_state = self.network(x_t[:, :, 0:2], timestep=t.to(self.device), y=class_label)
+                null_class, pen_state_null = self.network(x_t[:, :, 0:2], timestep=t.to(self.device), y=null_conditions)
                 noise_pred = (1 + guidance_scale) * noise_class - guidance_scale * null_class
                 #######################
             else:
