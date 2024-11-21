@@ -83,18 +83,20 @@ def tensor_to_pil_image(x: torch.Tensor, single_image=False):
     for b in range(B):
         # x[b, :, :] = scale_sketch(x[b, :, :], size=(256, 256))
         input_strokes = []
-        prev_x = 0
-        prev_y = 0
+        # prev_x = 0
+        # prev_y = 0
         temp_x = []
         temp_y = []
         for s in range(1, S):
             # Remove Padding
             if x[b, s, 0] == 0 and x[b, s, 1] == 0 and x[b, s, 2] == 1:
                 break
-            temp_x.append(prev_x + x[b, s, 0])
-            temp_y.append(prev_y + x[b, s, 1])
-            prev_x = x[b, s, 0]
-            prev_y = x[b, s, 1]
+            # temp_x.append(prev_x + x[b, s, 0])
+            # temp_y.append(prev_y + x[b, s, 1])
+            temp_x.append(x[b, s, 0])
+            temp_y.append( x[b, s, 1])
+            # prev_x = x[b, s, 0]
+            # prev_y = x[b, s, 1]
             if x[b, s, 2] == 1:
                 input_strokes.append([temp_x, temp_y])
                 temp_x = []
@@ -130,7 +132,7 @@ def get_data_iterator(iterable):
 class QuickDrawDataset(torch.utils.data.Dataset):
     def __init__(
             self, root: str, split: str, transform=None, category="cat", stroke_type="full", label_offset=1,
-            num_classes=1, stroke_length=30, coord_length=96
+            num_classes=1, mode="difference", coord_length=96
     ):
         super().__init__()
         self.root = root
@@ -140,12 +142,14 @@ class QuickDrawDataset(torch.utils.data.Dataset):
         self.category = category
         self.stroke_type = stroke_type
         self.num_classes = num_classes
-        self.stroke_length = stroke_length
+        self.mode = mode
         self.coord_length = coord_length
 
         data_path = f"{root}/{category}.ndjson"
         indices_path = f"../sketch_data/{category}/train_test_indices.json"
-        cache_path = f"{root}/{category}_{split}.pickle"
+        cache_path = f"{root}/{category}_{split}_{mode}.pickle"
+
+        print(f"Current Mode for {split}: {mode}")
 
         with open(data_path, 'r') as f:
             self.data = ndjson.load(f)
@@ -168,18 +172,28 @@ class QuickDrawDataset(torch.utils.data.Dataset):
             #### Preprocess into 3-Tuple ####
             full_data = []
             full_pen_label = []
+
             for idx in tqdm(self.indices):
                 item = self.data[idx]
                 strokes = item["drawing"]
-                temp_stroke = [[0, 0, 1]]
                 prev_x = 0
                 prev_y = 0
-                for stroke in strokes:
-                    for i, (xi, yi) in enumerate(zip(stroke[0], stroke[1])):
-                        pen_state = 0 if i != len(stroke[0])-1 else 1
-                        temp_stroke.append([xi - prev_x, yi - prev_y, pen_state])
-                        prev_x = xi
-                        prev_y = yi
+                if self.mode == "difference":
+                    temp_stroke = [[0, 0, 1]]
+                    for stroke in strokes:
+                        for i, (xi, yi) in enumerate(zip(stroke[0], stroke[1])):
+                            pen_state = 0 if i != len(stroke[0])-1 else 1
+                            temp_stroke.append([xi - prev_x, yi - prev_y, pen_state])
+                            prev_x = xi
+                            prev_y = yi
+
+                elif self.mode == "direct":
+                    temp_stroke = []
+                    for stroke in strokes:
+                        for i, (xi, yi) in enumerate(zip(stroke[0], stroke[1])):
+                            pen_state = 0 if i != len(stroke[0])-1 else 1
+                            temp_stroke.append([xi, yi, pen_state])
+
 
                 temp_result = np.array(temp_stroke)
                 # Reducing with RDP
@@ -210,6 +224,7 @@ class QuickDrawDataset(torch.utils.data.Dataset):
             with open(cache_path, "wb") as f:
                 pickle.dump({"vectors": self.vectors, "pen_label": self.pen_label}, f)
 
+
     def __getitem__(self, idx):
         return self.vectors[idx], self.pen_label[idx], self.labels[idx]
 
@@ -227,7 +242,7 @@ class QuickDrawDataModule(object):
             label_offset=1,
             category="cat",
             transform=None,
-            stroke_length=30,
+            mode="difference",
             coord_length=96
     ):
         self.root = root
@@ -238,7 +253,7 @@ class QuickDrawDataModule(object):
         self.transform = transform
         self.num_classes = 1
         self.category = category
-        self.stroke_length = stroke_length
+        self.mode = mode
         self.coord_length = coord_length
         self._set_dataset()
 
@@ -259,7 +274,7 @@ class QuickDrawDataModule(object):
             category=self.category,
             label_offset=self.label_offset,
             num_classes=self.num_classes,
-            stroke_length=self.stroke_length,
+            mode=self.mode,
             coord_length=self.coord_length
         )
         self.val_ds = QuickDrawDataset(
@@ -269,7 +284,7 @@ class QuickDrawDataModule(object):
             category=self.category,
             label_offset=self.label_offset,
             num_classes=self.num_classes,
-            stroke_length=self.stroke_length,
+            mode=self.mode,
             coord_length=self.coord_length
         )
 

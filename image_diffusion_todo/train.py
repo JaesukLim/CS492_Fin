@@ -43,7 +43,6 @@ def main(args):
 
     with open(save_dir / "config.json", "w") as f:
         json.dump(config, f, indent=2)
-    """######"""
 
     image_resolution = config.image_resolution
     ds_module = QuickDrawDataModule(
@@ -51,7 +50,8 @@ def main(args):
         batch_size=config.batch_size,
         num_workers=4,
         image_resolution=image_resolution,
-        category=config.category
+        category=config.category,
+        mode=config.coordinate_mode
     )
 
     train_dl = ds_module.train_dataloader()
@@ -195,5 +195,6 @@ if __name__ == "__main__":
     parser.add_argument("--sample_method", type=str, default="ddpm")
     parser.add_argument("--use_cfg", action="store_true")
     parser.add_argument("--cfg_dropout", type=float, default=0.1)
+    parser.add_argument("--coordinate_mode", type=str, default="direct")
     args = parser.parse_args()
     main(args)
