@@ -90,13 +90,19 @@ def tensor_to_pil_image(x: torch.Tensor, single_image=False):
         temp_y = []
         for s in range(1, S):
             # Remove Padding
-            if x[b, s, 0] <= -50 and x[b, s, 1] <= -50 and x[b, s, 2] == 1:
+            # if x[b, s, 0] == 0 and x[b, s, 1] == 0 and x[b, s, 2] == 1:
             # if x[b, s, 4] == 1:
-                break
+            #    break
             # temp_x.append(prev_x + x[b, s, 0])
             # temp_y.append(prev_y + x[b, s, 1])
-            temp_x.append(x[b, s, 0] * 65.6 + 113)
-            temp_y.append(x[b, s, 1] * 65.6 + 113)
+
+            # Standard Normal
+            # temp_x.append(x[b, s, 0] * 65.6 + 113)
+            # temp_y.append(x[b, s, 1] * 65.6 + 113)
+
+            temp_x.append((x[b, s, 0] / 5 + 0.5) * 255)
+            temp_y.append((x[b, s, 1] / 5 + 0.5) * 255)
+
             # prev_x = x[b, s, 0]
             # prev_y = x[b, s, 1]
             if x[b, s, 2] == 1:
@@ -217,15 +223,20 @@ class QuickDrawDataset(torch.utils.data.Dataset):
                     eps += 0.1
 
                 # Normalize Before Padding
-                temp_result[:, 0:2] -= np.mean(temp_result[:, 0:2])
-                temp_result[:, 0:2] /= np.std(temp_result[:, 0:2])
+                # temp_result[:, 0:2] -= np.mean(temp_result[:, 0:2])
+                # temp_result[:, 0:2] /= np.std(temp_result[:, 0:2])
+
+                # Min-Max Normalizing
+                temp_result[:, 0:2] /= 255
+                temp_result[:, 0:2] -= 0.5
+                temp_result[:, 0:2] *= 5
 
                 # Add Padding
                 if temp_result.shape[0] < self.coord_length:
                     if self.mode == "direct_5_tuple":
-                        padding = np.array([[-100, -100, 0, 0, 1] for _ in range(self.coord_length - temp_result.shape[0])])
+                        padding = np.array([[0, 0, 0, 0, 1] for _ in range(self.coord_length - temp_result.shape[0])])
                     else:
-                        padding = np.array([[-100, -100, 1] for _ in range(self.coord_length - temp_result.shape[0])])
+                        padding = np.array([[0, 0, 1] for _ in range(self.coord_length - temp_result.shape[0])])
                     temp_result = np.concatenate((temp_result, padding), axis=0)
 
                 # print(np.mean(temp_result[:, 0:2]), np.std(temp_result[:, 0:2]))

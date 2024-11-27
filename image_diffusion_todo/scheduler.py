@@ -86,15 +86,46 @@ class DDPMScheduler(BaseScheduler):
         ######## TODO ########
         # DO NOT change the code outside this part.
         # Assignment 1. Implement the DDPM reverse step.
-        eps_factor = (1 - self.alphas[t]) / (1 - self.alphas_cumprod[t]).sqrt()
+        # eps_factor = (1 - self.alphas[t]) / (1 - self.alphas_cumprod[t]).sqrt()
+        #
+        # z = torch.randn(x_t.shape).to(x_t.device)
+        # # x_t_prev = torch.normal((xt - eps_factor * eps_theta) / extract(self.var_scheduler.alphas, t, xt).sqrt(), sigma_t_square.sqrt())
+        # x_t_prev = (x_t - eps_factor * eps_theta) / self.alphas[t].sqrt() + self.sigmas[t] * z
+        #
+        # sample_prev = x_t_prev
+        # sample_prev = torch.cat((sample_prev, (pen_state > 0.5).float()), dim=2)
+        ######################
 
-        z = torch.randn(x_t.shape).to(x_t.device)
-        # x_t_prev = torch.normal((xt - eps_factor * eps_theta) / extract(self.var_scheduler.alphas, t, xt).sqrt(), sigma_t_square.sqrt())
-        x_t_prev = (x_t - eps_factor * eps_theta) / self.alphas[t].sqrt() + self.sigmas[t] * z
+        # Implement the DDIM reverse step
+        t = t.to(x_t.device)
+        alpha_t = self.alphas_cumprod[t]  # Shape: [B,1,1,1]
+        sqrt_alpha_t = alpha_t.sqrt()
+        sqrt_one_minus_alpha_t = (1 - alpha_t).sqrt()
+        beta_t = self.betas[t]
+        # Calculate x_0 estimate
+        x_0 = (x_t - sqrt_one_minus_alpha_t * eps_theta) / sqrt_alpha_t
+
+        # Handle t-1 (previous timestep)
+        t_prev = t - self.num_train_timesteps // self.num_inference_timesteps
+        if t_prev < 0:
+            t_prev = 0
+        alpha_t_prev = self.alphas_cumprod[t_prev]
+        sqrt_alpha_t_prev = alpha_t_prev.sqrt()
+        sqrt_one_minus_alpha_t_prev = (1 - alpha_t_prev).sqrt()
+
+        eta = 0.5
+
+        # Compute sigma for stochasticity
+        sigma_t = eta * ((1 - alpha_t_prev) / (1 - alpha_t) * beta_t).sqrt()  # [B,1,1,1]
+        # Compute the directional mean
+        pred_mean = sqrt_alpha_t_prev * x_0 + sqrt_one_minus_alpha_t_prev * eps_theta * (1 - eta)
+
+        z = torch.randn_like(x_t)
+        x_t_prev = pred_mean + sigma_t * z
 
         sample_prev = x_t_prev
+        # print(sample_prev.size(), (pen_state > 0.5).float().size())
         sample_prev = torch.cat((sample_prev, (pen_state > 0.5).float()), dim=2)
-        #######################
         
         return sample_prev
     

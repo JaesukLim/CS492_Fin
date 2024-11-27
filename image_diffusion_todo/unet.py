@@ -329,12 +329,12 @@ class UNetModel(nn.Module):
             normalization(ch),
             SiLU(),
             zero_module(linear(128, 2)),
+            # linear(128, 2),
         )
 
         self.pen_state_out = nn.Sequential(
-            linear(128, 64),
-            linear(64, 1),
-            Sigmoid()
+            linear(128, 1),
+            nn.Sigmoid()
         )
 
     def convert_to_fp16(self):
