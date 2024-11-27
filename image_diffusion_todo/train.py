@@ -101,7 +101,7 @@ def main(args):
         attention_resolutions=attention_ds,
         dropout=0.0,
         channel_mult=channel_mult,
-        num_classes=1,
+        num_classes=None,
         use_checkpoint=False,
         num_heads=4,
         num_heads_upsample=-1,
@@ -140,6 +140,7 @@ def main(args):
                 for i, img in enumerate(pil_images):
                     img.save(save_dir / f"step={step}-{i}.png")
 
+                ddpm.save(f"{save_dir}/checkpoint-{step}.ckpt")
                 ddpm.save(f"{save_dir}/last.ckpt")
                 ddpm.train()
 

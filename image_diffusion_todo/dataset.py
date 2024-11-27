@@ -79,9 +79,10 @@ def tensor_to_pil_image(x: torch.Tensor, single_image=False):
     """
     output = []
     B, S, _ = x.size()
-    x = x.cpu().int()
+    x = x.cpu()
     for b in range(B):
         # x[b, :, :] = scale_sketch(x[b, :, :], size=(256, 256))
+        print(x)
         input_strokes = []
         # prev_x = 0
         # prev_y = 0
@@ -89,12 +90,13 @@ def tensor_to_pil_image(x: torch.Tensor, single_image=False):
         temp_y = []
         for s in range(1, S):
             # Remove Padding
-            if x[b, s, 0] == 0 and x[b, s, 1] == 0 and x[b, s, 2] == 1:
+            if x[b, s, 0] <= -50 and x[b, s, 1] <= -50 and x[b, s, 2] == 1:
+            # if x[b, s, 4] == 1:
                 break
             # temp_x.append(prev_x + x[b, s, 0])
             # temp_y.append(prev_y + x[b, s, 1])
-            temp_x.append(x[b, s, 0])
-            temp_y.append( x[b, s, 1])
+            temp_x.append(x[b, s, 0] * 65.6 + 113)
+            temp_y.append(x[b, s, 1] * 65.6 + 113)
             # prev_x = x[b, s, 0]
             # prev_y = x[b, s, 1]
             if x[b, s, 2] == 1:
@@ -103,6 +105,9 @@ def tensor_to_pil_image(x: torch.Tensor, single_image=False):
                 temp_y = []
 
         images = []
+        if len(input_strokes) == 0:
+            print("No Images!")
+            input_strokes.append([[], []])
         for i in range(len(input_strokes)):
             image = draw_strokes(input_strokes[:i + 1])
 
@@ -172,7 +177,6 @@ class QuickDrawDataset(torch.utils.data.Dataset):
             #### Preprocess into 3-Tuple ####
             full_data = []
             full_pen_label = []
-
             for idx in tqdm(self.indices):
                 item = self.data[idx]
                 strokes = item["drawing"]
@@ -191,11 +195,19 @@ class QuickDrawDataset(torch.utils.data.Dataset):
                     temp_stroke = []
                     for stroke in strokes:
                         for i, (xi, yi) in enumerate(zip(stroke[0], stroke[1])):
-                            pen_state = 0 if i != len(stroke[0])-1 else 1
+                            pen_state = 0 if i != len(stroke[0]) - 1 else 1
                             temp_stroke.append([xi, yi, pen_state])
+
+                elif self.mode == "direct_5_tuple":
+                    temp_stroke = []
+                    for stroke in strokes:
+                        for i, (xi, yi) in enumerate(zip(stroke[0], stroke[1])):
+                            pen_state = [1, 0, 0] if i != len(stroke[0]) - 1 else [0, 1, 0]
+                            temp_stroke.append([xi, yi] + pen_state)
 
 
                 temp_result = np.array(temp_stroke)
+                temp_result = temp_result.astype(np.float32)
                 # Reducing with RDP
                 eps = 0.1
                 while temp_result.shape[0] > self.coord_length:
@@ -204,16 +216,22 @@ class QuickDrawDataset(torch.utils.data.Dataset):
                     temp_result = temp_result[mask]
                     eps += 0.1
 
+                # Normalize Before Padding
+                temp_result[:, 0:2] -= np.mean(temp_result[:, 0:2])
+                temp_result[:, 0:2] /= np.std(temp_result[:, 0:2])
+
                 # Add Padding
                 if temp_result.shape[0] < self.coord_length:
-                    padding = np.array([[0, 0, 1] for _ in range(self.coord_length - temp_result.shape[0])])
+                    if self.mode == "direct_5_tuple":
+                        padding = np.array([[-100, -100, 0, 0, 1] for _ in range(self.coord_length - temp_result.shape[0])])
+                    else:
+                        padding = np.array([[-100, -100, 1] for _ in range(self.coord_length - temp_result.shape[0])])
                     temp_result = np.concatenate((temp_result, padding), axis=0)
 
-                temp_result = temp_result.astype(np.float16)
+                # print(np.mean(temp_result[:, 0:2]), np.std(temp_result[:, 0:2]))
                 # Scale
-                # temp_result[:, 0:2] /= np.std(temp_result[:, 0:2])
                 full_data.append(torch.tensor(temp_result, dtype=torch.float32))
-                full_pen_label.append(torch.tensor(temp_result[:, 2], dtype=torch.float32).unsqueeze(-1))
+                full_pen_label.append(torch.tensor(temp_result[:, 2:], dtype=torch.float32))
 
             self.vectors = full_data
             self.pen_label = full_pen_label
@@ -308,7 +326,7 @@ class QuickDrawDataModule(object):
 
 
 if __name__ == "__main__":
-    data_module = QuickDrawDataModule("../data", 32, 4, 256, 1)
+    data_module = QuickDrawDataModule("../data", 32, 4, 256, 1, mode="direct_5_tuple")
 
     # eval_dir = Path(data_module.root) / "eval"
     # eval_dir.mkdir(exist_ok=True)

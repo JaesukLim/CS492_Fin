@@ -28,7 +28,7 @@ def main(args):
         mode="linear",
     ).to(device)
 
-    total_num_samples = 500
+    total_num_samples = 2000
     num_batches = int(np.ceil(total_num_samples / args.batch_size))
 
     for i in range(num_batches):
@@ -46,7 +46,6 @@ def main(args):
         else:
             samples = ddpm.sample(
                 B,
-                class_label=torch.randint(1, 2, (B,)),
                 guidance_scale=0.0,
             )
 
@@ -60,7 +59,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--batch_size", type=int, default=64)
+    parser.add_argument("--batch_size", type=int, default=200)
     parser.add_argument("--gpu", type=int, default=0)
     parser.add_argument("--ckpt_path", type=str)
     parser.add_argument("--save_dir", type=str)

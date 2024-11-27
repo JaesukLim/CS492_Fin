@@ -31,7 +31,7 @@ class DiffusionModule(nn.Module):
         # print(pen_state, pen_label)
         pen_loss = nn.BCELoss()(pen_state, pen_label)
 
-        loss = x0 + 0.5 * pen_loss
+        loss = x0 + pen_loss
         ######################
         return loss
     
@@ -51,7 +51,7 @@ class DiffusionModule(nn.Module):
         class_label: Optional[torch.Tensor] = None,
         guidance_scale: Optional[float] = 0.0,
     ):
-        x_T = torch.randn([batch_size, 96, 3]).to(self.device)
+        x_T = torch.randn([batch_size, 96, 5]).to(self.device)
 
         do_classifier_free_guidance = guidance_scale > 0.0
 
@@ -74,8 +74,8 @@ class DiffusionModule(nn.Module):
             if do_classifier_free_guidance:
                 ######## TODO ########
                 # Assignment 2. Implement the classifier-free guidance.
-                noise_class, pen_state = self.network(x_t[:, :, 0:2], timestep=t.to(self.device), y=class_label)
-                null_class, pen_state_null = self.network(x_t[:, :, 0:2], timestep=t.to(self.device), y=null_conditions)
+                noise_class, pen_state = self.network(x_t[:, :, 0:2], timesteps=t.to(self.device), y=class_label)
+                null_class, pen_state_null = self.network(x_t[:, :, 0:2], timesteps=t.to(self.device), y=null_conditions)
                 noise_pred = (1 + guidance_scale) * noise_class - guidance_scale * null_class
                 #######################
             else:

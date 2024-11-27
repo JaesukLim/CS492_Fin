@@ -332,7 +332,8 @@ class UNetModel(nn.Module):
         )
 
         self.pen_state_out = nn.Sequential(
-            linear(128, 1),
+            linear(128, 64),
+            linear(64, 1),
             Sigmoid()
         )
 
